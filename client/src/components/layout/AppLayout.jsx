@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LogOut, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
-import { navItems } from '../../config/navItems.js';
+import { LogOut, ChevronLeft, ChevronRight, Wallet, User, Shield } from 'lucide-react';
+import { personalNavItems, insuranceNavItems } from '../../config/navItems.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 const AppLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [activeSection, setActiveSection] = useState(() => {
+    return localStorage.getItem('finnova_active_section') || 'personal';
+  });
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -13,6 +16,13 @@ const AppLayout = () => {
     await logout();
     navigate('/login');
   };
+
+  const handleSectionChange = (section) => {
+    setActiveSection(section);
+    localStorage.setItem('finnova_active_section', section);
+  };
+
+  const currentNavItems = activeSection === 'personal' ? personalNavItems : insuranceNavItems;
 
   const initials = user?.name
     ? user.name
@@ -49,9 +59,76 @@ const AppLayout = () => {
             )}
           </div>
 
+          {/* Section Switcher Toggle */}
+          <div className={`px-3 mb-4 transition-all duration-200 ${collapsed ? 'flex justify-center' : ''}`}>
+            {collapsed ? (
+              <div className="flex flex-col gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
+                <button
+                  onClick={() => handleSectionChange('personal')}
+                  className={`p-2 rounded-lg transition-all duration-200 ${
+                    activeSection === 'personal'
+                      ? 'bg-gradient-accent text-white shadow-glow'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Personal Section"
+                >
+                  <User size={16} />
+                </button>
+                <button
+                  onClick={() => handleSectionChange('insurance')}
+                  className={`p-2 rounded-lg transition-all duration-200 ${
+                    activeSection === 'insurance'
+                      ? 'bg-gradient-accent text-white shadow-glow'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Insurance & Schemes Section"
+                >
+                  <Shield size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative flex p-1 rounded-xl bg-white/5 border border-white/10 select-none">
+                <button
+                  onClick={() => handleSectionChange('personal')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 z-10 ${
+                    activeSection === 'personal'
+                      ? 'text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={{ position: 'relative' }}
+                >
+                  <User size={14} className="shrink-0" />
+                  <span className="hidden lg:inline">Personal</span>
+                </button>
+                <button
+                  onClick={() => handleSectionChange('insurance')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 z-10 ${
+                    activeSection === 'insurance'
+                      ? 'text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={{ position: 'relative' }}
+                >
+                  <Shield size={14} className="shrink-0" />
+                  <span className="hidden lg:inline">Insurance</span>
+                </button>
+                {/* Highlight Background Slider */}
+                <div
+                  className={`absolute top-1 bottom-1 rounded-lg bg-gradient-accent transition-all duration-300 shadow-glow ${
+                    activeSection === 'personal'
+                      ? 'left-1 w-[calc(50%-4px)]'
+                      : 'left-[calc(50%+2px)] w-[calc(50%-4px)]'
+                  }`}
+                  style={{ zIndex: 0 }}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Nav items */}
           <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (
+            {currentNavItems.map((item) => (
+
               <NavLink
                 key={item.path}
                 to={item.path}
