@@ -21,3 +21,7 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Runtime user uploads (receipt scans) & OCR traineddata cache
+server/uploads/
+server/.ocrcache/

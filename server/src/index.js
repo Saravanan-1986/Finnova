@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 import authRoutes from './routes/auth.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -15,6 +18,7 @@ import schemeRoutes from './routes/schemeRoutes.js';
 import insuranceRoutes from './routes/insuranceRoutes.js';
 import savedPlanRoutes from './routes/savedPlanRoutes.js';
 import assistantRoutes from './routes/assistantRoutes.js';
+import receiptRoutes from './routes/receiptRoutes.js';
 import { refreshAllInsurance } from './services/insuranceRefresh.js';
 
 dotenv.config();
@@ -23,6 +27,12 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/finnova';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+// Uploaded receipt images are served at /uploads/receipts/...
+// (resolve to <repo>/server/uploads — one level up from src/)
+const UPLOADS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../uploads');
+fs.mkdirSync(path.join(UPLOADS_ROOT, 'receipts'), { recursive: true });
+app.use('/uploads', express.static(UPLOADS_ROOT));
 
 // Middleware
 const allowedOrigins = [
@@ -59,15 +69,16 @@ app.use('/api/dependents', dependentRoutes);
 app.use('/api/schemes', schemeRoutes);
 app.use('/api/saved-plans', savedPlanRoutes);
 app.use('/api/assistant', assistantRoutes);
-app.use('/api', insuranceRoutes);
+app.use('/api/receipts', receiptRoutes);
 
-
-
-
-// Health check
+// Health check — must be registered BEFORE the catch-all '/api' insurance
+// router below: its global `protect` middleware would otherwise intercept
+// /api/health and answer 401 instead of a public health report.
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'FINNOVA API is running' });
 });
+
+app.use('/api', insuranceRoutes);
 
 // 404 handler
 app.use((req, res) => {

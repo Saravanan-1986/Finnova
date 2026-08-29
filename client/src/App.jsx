@@ -8,6 +8,7 @@ import SpendingHistory from './pages/SpendingHistory.jsx';
 import BillsEmi from './pages/BillsEmi.jsx';
 import GoalPlanner from './pages/GoalPlanner.jsx';
 import EmergencyFund from './pages/EmergencyFund.jsx';
+import ReceiptScanner from './pages/ReceiptScanner.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
 import AIAssistant from './pages/AIAssistant.jsx';
 // Insurance & Schemes section
@@ -38,6 +39,7 @@ const App = () => {
       >
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/spending" element={<SpendingHistory />} />
+        <Route path="/receipt-scanner" element={<ReceiptScanner />} />
         <Route path="/bills-emi" element={<BillsEmi />} />
         <Route path="/goals" element={<GoalPlanner />} />
         <Route path="/emergency-fund" element={<EmergencyFund />} />

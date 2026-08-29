@@ -15,9 +15,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "finnova": "file:..",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.8.0"
+    "mongoose": "^8.8.0",
+    "multer": "^2.3.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"

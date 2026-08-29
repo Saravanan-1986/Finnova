@@ -6,6 +6,7 @@ import {
   Shield,
   Repeat,
   Sparkles,
+  Receipt,
   Home,
   Landmark,
   ShieldCheck,
@@ -20,6 +21,7 @@ import {
 export const personalNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/spending', label: 'Spending History', icon: List },
+  { path: '/receipt-scanner', label: 'Receipt Scanner', icon: Receipt },
   { path: '/bills-emi', label: 'Bills & EMI', icon: CalendarClock },
   { path: '/goals', label: 'Goal Planner', icon: Target },
   { path: '/emergency-fund', label: 'Emergency Fund', icon: Shield },
