@@ -3,9 +3,11 @@ import InsuranceProduct from '../models/InsuranceProduct.js';
 import Dependent from '../models/Dependent.js';
 import Goal from '../models/Goal.js';
 import SavedPlan from '../models/SavedPlan.js';
+import BillEmi from '../models/BillEmi.js';
 import { protect } from '../middleware/auth.js';
 import { recommendedCoverAmount } from '../services/coverageCalculator.js';
 import { calculateFinancialHealth } from '../services/financialHealth.js';
+import { refreshAllInsurance } from '../services/insuranceRefresh.js';
 
 const router = express.Router();
 router.use(protect);
@@ -59,7 +61,21 @@ router.get('/insurance-products/:id', async (req, res) => {
   }
 });
 
-// @route   GET /api/insurance/coverage-calculator
+// @route   POST /api/insurance/refresh
+// @desc    Manually trigger the weekly insurance detail refresh from official sites
+// @access  Private
+router.post('/insurance/refresh', async (req, res) => {
+  try {
+    const result = await refreshAllInsurance();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Insurance refresh error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
+
 // @desc    Calculate recommended health and life coverages
 // @access  Private
 router.get('/insurance/coverage-calculator', async (req, res) => {

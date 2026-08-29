@@ -15,6 +15,7 @@ import schemeRoutes from './routes/schemeRoutes.js';
 import insuranceRoutes from './routes/insuranceRoutes.js';
 import savedPlanRoutes from './routes/savedPlanRoutes.js';
 import assistantRoutes from './routes/assistantRoutes.js';
+import { refreshAllInsurance } from './services/insuranceRefresh.js';
 
 dotenv.config();
 
@@ -84,6 +85,21 @@ mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected');
+
+    // Weekly insurance detail refresh: verify every product against its official
+    // site once every 7 days so the catalogue stays current.
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    setInterval(async () => {
+      try {
+        const result = await refreshAllInsurance();
+        console.log(
+          `🔄 Weekly insurance refresh complete: ${result.ok}/${result.total} verified`
+        );
+      } catch (err) {
+        console.error('Weekly insurance refresh failed:', err.message);
+      }
+    }, WEEK_MS);
+
     app.listen(PORT, () => {
       console.log(`🚀 FINNOVA server running on http://localhost:${PORT}`);
     });

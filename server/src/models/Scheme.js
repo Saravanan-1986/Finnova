@@ -75,6 +75,16 @@ const schemeSchema = new mongoose.Schema(
       required: [true, 'Official link is required'],
       trim: true,
     },
+    // Whether the scheme can be applied for online, plus the application portal URL
+    applyOnline: {
+      type: Boolean,
+      default: false,
+    },
+    applyLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
   },
   {
     timestamps: true,

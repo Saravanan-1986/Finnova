@@ -93,10 +93,21 @@ router.get('/recommended', async (req, res) => {
       };
     });
 
-    // Sort by recommendation score descending
+    // Sort by recommendation score descending so the most suitable schemes lead
     scoredSchemes.sort((a, b) => b.matchScore - a.matchScore);
 
-    res.json({ success: true, schemes: scoredSchemes });
+    // Only surface schemes the user actually matches (score > 0) by default, so
+    // the feed is a true "suitable for you" ranking rather than all 26 schemes.
+    // Callers that need the full catalogue can pass ?minScore=0.
+    const minScore = Number(req.query.minScore) || 1;
+    const matchedSchemes = scoredSchemes.filter((s) => s.matchScore >= minScore);
+
+    res.json({
+      success: true,
+      schemes: matchedSchemes,
+      totalMatching: matchedSchemes.length,
+      totalSchemes: scoredSchemes.length,
+    });
   } catch (error) {
     console.error('Get recommended schemes error:', error);
     res.status(500).json({ success: false, message: 'Server error' });

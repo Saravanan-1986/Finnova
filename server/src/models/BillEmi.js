@@ -45,6 +45,12 @@ const billEmiSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    // Expense created when this record is first marked paid (kept to avoid duplicates)
+    linkedExpense: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Expense',
+      default: null,
+    },
   },
   {
     timestamps: true,

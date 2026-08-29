@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Landmark, CheckCircle, HelpCircle, Loader2, Sparkles, Users } from 'lucide-react';
+import { Search, Landmark, CheckCircle, HelpCircle, Loader2, Sparkles, Users, ExternalLink, Send } from 'lucide-react';
 import api from '../../services/api.js';
 import Skeleton from '../../components/ui/Skeleton.jsx';
 
@@ -79,25 +79,29 @@ const GovernmentSchemes = () => {
     }
   };
 
-  // Perform client-side filtering on top of calculated match scores for a dynamic experience
-  const filteredSchemes = schemes.filter((scheme) => {
-    const matchesSearch =
-      scheme.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      scheme.shortDescription.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = !selectedCategory || scheme.category === selectedCategory;
-    const matchesState =
-      !selectedState ||
-      scheme.eligibility.applicableStates.some(
-        (s) => s.toLowerCase() === 'any' || s.toLowerCase() === selectedState.toLowerCase()
-      );
-    const matchesOccupation =
-      !selectedOccupation ||
-      scheme.eligibility.occupation.some(
-        (o) => o.toLowerCase() === 'any' || o.toLowerCase() === selectedOccupation.toLowerCase()
-      );
+  // Perform client-side filtering on top of calculated match scores for a
+  // dynamic experience. The server already ranks by suitability; this re-sort
+  // guarantees the order stays profile-first even while filters are applied.
+  const filteredSchemes = schemes
+    .filter((scheme) => {
+      const matchesSearch =
+        scheme.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        scheme.shortDescription.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = !selectedCategory || scheme.category === selectedCategory;
+      const matchesState =
+        !selectedState ||
+        scheme.eligibility.applicableStates.some(
+          (s) => s.toLowerCase() === 'any' || s.toLowerCase() === selectedState.toLowerCase()
+        );
+      const matchesOccupation =
+        !selectedOccupation ||
+        scheme.eligibility.occupation.some(
+          (o) => o.toLowerCase() === 'any' || o.toLowerCase() === selectedOccupation.toLowerCase()
+        );
 
-    return matchesSearch && matchesCategory && matchesState && matchesOccupation;
-  });
+      return matchesSearch && matchesCategory && matchesState && matchesOccupation;
+    })
+    .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
 
   const getCategoryColor = (cat) => {
     switch (cat) {
@@ -130,7 +134,7 @@ const GovernmentSchemes = () => {
             Government Welfare Schemes
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            Explore Indian central and state welfare initiatives matching your demographics and family setup.
+            Ranked by how well each scheme fits your profile — age, income, occupation, region, and family. Open a scheme to apply online where available.
           </p>
         </div>
 
@@ -216,6 +220,16 @@ const GovernmentSchemes = () => {
         </select>
       </div>
 
+      {/* Ranked results summary */}
+      {!loading && filteredSchemes.length > 0 && (
+        <p className="text-xs text-gray-500">
+          Showing <span className="text-white font-bold">{filteredSchemes.length}</span> of {schemes.length}{' '}
+          schemes, ranked by how well each fits your profile. Schemes that can be applied for online show an
+          <span className="text-emerald-400 font-semibold"> Apply Online </span>
+          button on their card.
+        </p>
+      )}
+
       {/* Main Catalog Rendering */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -262,6 +276,20 @@ const GovernmentSchemes = () => {
                     >
                       {scheme.category === 'crop' ? 'agriculture' : scheme.category}
                     </span>
+                    {typeof scheme.matchScore === 'number' && (
+                      <span
+                        className={`ml-auto text-xs font-bold rounded-full px-2.5 py-0.5 border ${
+                          scheme.matchScore >= 70
+                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25'
+                            : scheme.matchScore >= 40
+                            ? 'text-amber-400 bg-amber-500/10 border-amber-500/25'
+                            : 'text-gray-400 bg-white/5 border-white/10'
+                        }`}
+                        title="How well this scheme matches your profile"
+                      >
+                        {scheme.matchScore}% match
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-lg font-bold text-white mb-2 group-hover:text-accent-start transition-colors pr-12 line-clamp-1">
@@ -292,6 +320,20 @@ const GovernmentSchemes = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Apply online CTA — shown when this scheme has an online application portal */}
+                {scheme.applyOnline && scheme.applyLink && (
+                  <a
+                    href={scheme.applyLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mb-3 flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition-colors"
+                  >
+                    <Send size={13} />
+                    Apply Online — Official Portal
+                    <ExternalLink size={12} />
+                  </a>
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center gap-3 pt-4 border-t border-white/5">

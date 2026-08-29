@@ -23,7 +23,8 @@ router.get('/summary', async (req, res) => {
     });
 
     const totalSpentThisMonth = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const incomeLeft = Math.max(0, (req.user.monthlyIncome || 0) - totalSpentThisMonth);
+    const monthlyIncome = req.user.monthlyIncome || req.user.monthlyAllowance || 0;
+    const incomeLeft = Math.max(0, monthlyIncome - totalSpentThisMonth);
 
     // Recent 5 expenses (all time, newest first)
     const recentExpenses = await Expense.find({ user: req.user._id })
@@ -43,7 +44,7 @@ router.get('/summary', async (req, res) => {
     res.json({
       success: true,
       summary: {
-        monthlyIncome: req.user.monthlyIncome || 0,
+        monthlyIncome: req.user.monthlyIncome || req.user.monthlyAllowance || 0,
         totalSpentThisMonth,
         incomeLeft,
         recentExpenses,

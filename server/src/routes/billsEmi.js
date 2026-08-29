@@ -1,5 +1,6 @@
 import express from 'express';
 import BillEmi from '../models/BillEmi.js';
+import Expense from '../models/Expense.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -72,11 +73,28 @@ router.patch('/:id/pay', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Record not found' });
     }
 
+    const wasAlreadyPaid = record.status === 'paid';
     record.status = 'paid';
     record.paidOn = new Date();
+
+    // Sync: the first time a bill/EMI is marked paid, record it as an expense so it
+    // deducts from monthly income and shows up in Spending History.
+    let linkedExpense = null;
+    if (!wasAlreadyPaid) {
+      linkedExpense = await Expense.create({
+        user: req.user._id,
+        amount: record.amount,
+        category: 'Bills & EMI',
+        description: `${record.type === 'emi' ? 'EMI' : 'Bill'} payment: ${record.title}`,
+        date: new Date(),
+        source: 'manual',
+      });
+      record.linkedExpense = linkedExpense._id;
+    }
+
     await record.save();
 
-    res.json({ success: true, record });
+    res.json({ success: true, record, expense: linkedExpense });
   } catch (error) {
     console.error('Mark paid error:', error);
     res.status(500).json({ success: false, message: 'Server error' });

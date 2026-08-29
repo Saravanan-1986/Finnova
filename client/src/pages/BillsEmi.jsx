@@ -235,7 +235,7 @@ const BillsEmi = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate line-through">{record.title}</p>
                   <p className="text-xs text-gray-500">
-                    Paid on {formatDate(record.paidOn)}
+                    Paid on {formatDate(record.paidOn)} · deducted from income & shown in Spending History
                   </p>
                 </div>
                 <span className="text-sm font-semibold text-gray-400">

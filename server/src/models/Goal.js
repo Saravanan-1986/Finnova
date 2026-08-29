@@ -39,6 +39,25 @@ const goalSchema = new mongoose.Schema(
       enum: [3, 6],
       default: 3,
     },
+    // Audit trail of every contribution (used for contribution history + spending sync)
+    contributions: [
+      {
+        amount: {
+          type: Number,
+          required: true,
+          min: [0, 'Contribution amount cannot be negative'],
+        },
+        date: {
+          type: Date,
+          default: Date.now,
+        },
+        // Linked expense so the contribution is reflected in Spending History & income
+        expense: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Expense',
+        },
+      },
+    ],
   },
   {
     timestamps: true,

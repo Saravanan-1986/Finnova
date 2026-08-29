@@ -11,6 +11,9 @@ import {
   ShoppingCart,
   MoreHorizontal,
   Wallet,
+  PiggyBank,
+  CreditCard,
+  Shield,
 } from 'lucide-react';
 
 const iconMap = {
@@ -26,6 +29,9 @@ const iconMap = {
   'shopping-cart': ShoppingCart,
   'more-horizontal': MoreHorizontal,
   wallet: Wallet,
+  'piggy-bank': PiggyBank,
+  'credit-card': CreditCard,
+  shield: Shield,
 };
 
 // Accepts the icon key from EXPENSE_CATEGORIES (e.g. 'utensils', 'car')

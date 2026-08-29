@@ -7,6 +7,11 @@ const router = express.Router();
 router.use(protect);
 
 // Helper: compute average monthly spending (last 3 months)
+// Counts only real consumption — Savings transfers (goal & emergency-fund
+// contributions) and pre-committed Bills & EMI payments are NOT consumer
+// spending. Without this exclusion, contributing to a goal or the emergency
+// fund would inflate the fund's own target (a circular loop where saving
+// money makes the safety-net goal grow forever).
 const getAverageMonthlySpending = async (userId) => {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
@@ -14,12 +19,19 @@ const getAverageMonthlySpending = async (userId) => {
   const expenses = await Expense.find({
     user: userId,
     date: { $gte: threeMonthsAgo },
+    category: { $nin: ['Savings', 'Bills & EMI'] },
   });
 
   if (expenses.length === 0) return null;
 
+  // Average across the number of distinct months that actually have data
+  // (not a hard ÷3), so a user with only one month of history still gets a
+  // fair estimate of their monthly living cost.
+  const monthKeys = new Set();
+  expenses.forEach((e) => monthKeys.add(`${e.date.getFullYear()}-${e.date.getMonth()}`));
+
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
-  return total / 3;
+  return total / Math.max(1, monthKeys.size);
 };
 
 // Helper: get or create the emergency fund goal
@@ -45,7 +57,8 @@ const getOrCreateEmergencyFund = async (userId) => {
 // Helper: build the enriched emergency fund response
 const buildFundResponse = async (fund, user) => {
   const avgMonthlySpending = await getAverageMonthlySpending(user._id);
-  const monthlySpending = avgMonthlySpending !== null ? avgMonthlySpending : user.monthlyIncome * 0.3;
+  const monthlySpending =
+    avgMonthlySpending !== null ? avgMonthlySpending : (user.monthlyIncome || user.monthlyAllowance || 0) * 0.3;
 
   const target3 = Math.round(monthlySpending * 3);
   const target6 = Math.round(monthlySpending * 6);
@@ -95,6 +108,19 @@ router.patch('/contribute', async (req, res) => {
 
     const fund = await getOrCreateEmergencyFund(req.user._id);
     fund.savedAmount = Math.min(fund.targetAmount, fund.savedAmount + Number(amount));
+
+    // Sync: record the contribution in spending history so it deducts from monthly
+    // income and is visible in Spending History.
+    const expense = await Expense.create({
+      user: req.user._id,
+      amount: Number(amount),
+      category: 'Savings',
+      description: 'Emergency Fund contribution',
+      date: new Date(),
+      source: 'manual',
+    });
+
+    fund.contributions.push({ amount: Number(amount), date: new Date(), expense: expense._id });
     await fund.save();
 
     const data = await buildFundResponse(fund, req.user);

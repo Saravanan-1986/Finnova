@@ -1,5 +1,6 @@
 import express from 'express';
 import Goal from '../models/Goal.js';
+import Expense from '../models/Expense.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -98,7 +99,21 @@ router.patch('/:id/contribute', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Goal not found' });
     }
 
-    goal.savedAmount = Math.min(goal.targetAmount, goal.savedAmount + Number(amount));
+    const amountNum = Number(amount);
+    goal.savedAmount = Math.min(goal.targetAmount, goal.savedAmount + amountNum);
+
+    // Sync: record the contribution in spending history so it deducts from monthly
+    // income and is visible in Spending History.
+    const expense = await Expense.create({
+      user: req.user._id,
+      amount: amountNum,
+      category: 'Savings',
+      description: `Goal contribution: ${goal.title}`,
+      date: new Date(),
+      source: 'manual',
+    });
+
+    goal.contributions.push({ amount: amountNum, date: new Date(), expense: expense._id });
     await goal.save();
 
     res.json({

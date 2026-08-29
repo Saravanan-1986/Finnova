@@ -1,15 +1,27 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, ShieldCheck, Heart, Home, Car, AlertTriangle, ArrowRight, Loader2, Bookmark, CheckCircle } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ShieldAlert, ShieldCheck, Heart, Home, Car, AlertTriangle, ArrowRight, Loader2, Bookmark, CheckCircle, Sparkles } from 'lucide-react';
 import api from '../../services/api.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { rankInsuranceProducts } from '../../utils/insuranceRanking.js';
 import Skeleton from '../../components/ui/Skeleton.jsx';
+
+const VALID_PRODUCT_CATEGORIES = ['health', 'term_life', 'vehicle', 'accident'];
 
 const PrivateInsurance = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [calculator, setCalculator] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('health');
+  // Default to "All Plans" so every insurance that suits the user is visible;
+  // deep-links like /insurance/products?category=health (from the Coverage
+  // Calculator) open on the matching tab instead.
+  const [activeTab, setActiveTab] = useState(() => {
+    const fromQuery = searchParams.get('category');
+    return VALID_PRODUCT_CATEGORIES.includes(fromQuery) ? fromQuery : 'all';
+  });
 
   // Feedback states
   const [savingIds, setSavingIds] = useState(new Set());
@@ -66,12 +78,20 @@ const PrivateInsurance = () => {
     }
   };
 
-  // Filter products by tab
-  const filteredProducts = products.filter((prod) => prod.category === activeTab);
+  // Rank every product against the user's real profile (age, occupation, income,
+  // family size) plus the cover amounts the calculator recommends for them, so
+  // the catalogue always leads with the policies that suit this user best.
+  const rankedProducts = useMemo(() => {
+    return rankInsuranceProducts(products, calculator, user, calculator?.dependents);
+  }, [products, calculator, user]);
+
+  // Filter products by tab (including an "All" tab)
+  const filteredProducts =
+    activeTab === 'all' ? rankedProducts : rankedProducts.filter((prod) => prod.category === activeTab);
 
   const getActiveRecommendation = () => {
     if (!calculator) return null;
-    if (activeTab === 'health') {
+    if (activeTab === 'health' || activeTab === 'all') {
       return {
         title: 'Health Coverage recommendation',
         amount: calculator.health.amount,
@@ -102,13 +122,14 @@ const PrivateInsurance = () => {
           Private Insurance Policies
         </h1>
         <p className="text-gray-400 text-sm mt-1">
-          Explore private health, term life, vehicle, and accident covers from top insurers.
+          Ranked by how well each policy suits your profile — age, income, family, and your recommended cover amounts. Explore health, term life, vehicle, and accident covers from top insurers.
         </p>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-white/10 gap-2 overflow-x-auto pb-1">
         {[
+          { id: 'all', label: 'All Plans', icon: Sparkles },
           { id: 'health', label: 'Health Insurance', icon: Heart },
           { id: 'term_life', label: 'Term Life Cover', icon: Home },
           { id: 'vehicle', label: 'Vehicle Insurance', icon: Car },
@@ -194,6 +215,11 @@ const PrivateInsurance = () => {
                       <span className="text-sm font-extrabold text-accent-end">
                         {prod.claimSettlementRatio}%
                       </span>
+                      {prod.rank !== undefined && (
+                        <span className="mt-1 inline-block text-[10px] font-bold text-white bg-gradient-accent rounded-full px-2 py-0.5">
+                          Match {prod.rank}%
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -201,9 +227,15 @@ const PrivateInsurance = () => {
                     {prod.shortDescription}
                   </p>
 
+                  {prod.reason && (
+                    <p className="text-xs text-accent-start bg-accent-start/10 border border-accent-start/20 rounded-lg px-3 py-2 mb-4 leading-relaxed">
+                      {prod.reason}
+                    </p>
+                  )}
+
                   {/* Highlights of key features */}
                   <ul className="space-y-2 mb-6">
-                    {prod.keyFeatures.slice(0, 2).map((feat, idx) => (
+                    {(prod.keyFeatures || []).slice(0, 2).map((feat, idx) => (
                       <li key={idx} className="text-xs text-gray-300 flex items-start gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-accent-start shrink-0 mt-1.5" />
                         <span className="line-clamp-1">{feat}</span>

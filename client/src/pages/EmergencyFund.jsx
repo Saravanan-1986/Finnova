@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, Loader2, TrendingUp, Info } from 'lucide-react';
+import { Shield, Loader2, TrendingUp, Info, History } from 'lucide-react';
 import api from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getCurrencySymbol } from '../constants/categories.js';
@@ -154,6 +154,38 @@ const EmergencyFund = () => {
             </div>
           </div>
 
+          {/* Contribution History */}
+          {fund.contributions && fund.contributions.length > 0 && (
+            <div className="glass-card p-6">
+              <h3 className="font-medium text-white mb-4 flex items-center gap-2">
+                <History size={16} className="text-accent-start" />
+                Contribution History ({fund.contributions.length})
+              </h3>
+              <ul className="space-y-2">
+                {[...fund.contributions]
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .map((c, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-center justify-between text-sm bg-white/5 rounded-lg px-3 py-2"
+                    >
+                      <span className="text-gray-400">
+                        {new Date(c.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                      <span className="font-semibold text-white">
+                        {currency}
+                        {Number(c.amount).toLocaleString('en-IN')}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
           {/* Info card */}
           <div className="glass-card p-6">
             <div className="flex items-start gap-3">
@@ -188,6 +220,11 @@ const EmergencyFund = () => {
               className="input-field"
               autoFocus
             />
+            <p className="text-[11px] text-gray-500 mt-2 flex items-start gap-1.5">
+              <History size={12} className="shrink-0 mt-0.5 text-accent-start" />
+              This amount is saved to your emergency fund's contribution history, deducted
+              from your monthly income, and appears under "Savings" in Spending History.
+            </p>
           </div>
           <button type="submit" disabled={contributing} className="btn-primary w-full flex items-center justify-center gap-2">
             {contributing && <Loader2 size={18} className="animate-spin" />}

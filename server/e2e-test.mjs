@@ -23,6 +23,7 @@ const token = signupData.token;
 ok('signup returns JWT', !!token);
 const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 const post = (path, body) => fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+const patch = (path, body) => fetch(`${BASE}${path}`, { method: 'PATCH', headers, body: JSON.stringify(body) });
 const get = (path) => fetch(`${BASE}${path}`, { headers });
 
 // 2. Seed supporting data
@@ -38,7 +39,7 @@ ok('create goal', goal.success);
 const gid = goal.goal?._id;
 if (gid) await post(`/goals/${gid}/contribute`, { amount: 30000 });
 
-const ef = await j(await post('/emergency-fund/contribute', { amount: 50000 }));
+const ef = await j(await patch('/emergency-fund/contribute', { amount: 50000 }));
 ok('emergency fund contribution', ef.success);
 
 await post('/expenses', { amount: 18500, category: 'Food & Dining', description: 'Groceries', date: new Date().toISOString() });
@@ -64,7 +65,7 @@ ok('GET /api/schemes/:id (scored)', schemeDetail.success && typeof schemeDetail.
 
 // 5. Insurance products & coverage calculator
 const products = await j(await get('/insurance-products'));
-ok('GET /api/insurance-products (11 seeded)', products.success && products.products.length === 11, `count=${products.products.length}`);
+ok('GET /api/insurance-products (19 seeded)', products.success && products.products.length === 19, `count=${products.products.length}`);
 
 const calculator = await j(await get('/insurance/coverage-calculator'));
 ok('coverage-calc pulls liabilities from Bills/EMI',

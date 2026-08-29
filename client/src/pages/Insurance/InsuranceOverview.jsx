@@ -1,7 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Landmark, ShieldCheck, Heart, Shield, Users, Sparkles, AlertTriangle, Loader2, Bookmark, CheckCircle } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Landmark, ShieldCheck, Heart, Shield, Users, Sparkles, AlertTriangle, Loader2, Bookmark, CheckCircle, User, MapPin, Briefcase, Wallet, CalendarDays, ArrowRight, BookmarkCheck } from 'lucide-react';
 import api from '../../services/api.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { rankInsuranceProducts, inrLakhs } from '../../utils/insuranceRanking.js';
 import Skeleton from '../../components/ui/Skeleton.jsx';
 
 const categoryColor = (cat) => {
@@ -19,14 +21,15 @@ const categoryColor = (cat) => {
   return map[cat] || 'text-gray-400 bg-gray-500/10 border-gray-500/20';
 };
 
-const inrLakhs = (amount) => `₹${(Number(amount || 0) / 100000).toFixed(0)}L`;
-
 const InsuranceOverview = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [schemes, setSchemes] = useState([]);
   const [products, setProducts] = useState([]);
   const [calculator, setCalculator] = useState(null);
   const [health, setHealth] = useState(null);
+  const [dependents, setDependents] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingIds, setSavingIds] = useState(new Set());
   const [savedIds, setSavedIds] = useState(new Set());
@@ -44,20 +47,28 @@ const InsuranceOverview = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    // Load every panel independently so one failing request never blanks the
+    // whole overview — each section simply renders whatever data arrived.
     try {
-      const [schemesRes, productsRes, calcRes, healthRes, plansRes] = await Promise.all([
+      const [schemesRes, productsRes, calcRes, healthRes, plansRes, depsRes] = await Promise.allSettled([
         api.get(`/schemes/recommended?includeFamily=${includeFamily}`),
         api.get('/insurance-products'),
         api.get('/insurance/coverage-calculator'),
         api.get('/financial-health-score'),
         api.get('/saved-plans'),
+        api.get('/dependents'),
       ]);
-      setSchemes(schemesRes.data.schemes || []);
-      setProducts(productsRes.data.products || []);
-      setCalculator(calcRes.data);
-      setHealth(healthRes.data);
-      const saved = new Set((plansRes.data.plans || []).map((p) => p.itemId?._id || p.itemId));
-      setSavedIds(saved);
+
+      if (schemesRes.status === 'fulfilled') setSchemes(schemesRes.value.data.schemes || []);
+      if (productsRes.status === 'fulfilled') setProducts(productsRes.value.data.products || []);
+      if (calcRes.status === 'fulfilled') setCalculator(calcRes.value.data);
+      if (healthRes.status === 'fulfilled') setHealth(healthRes.value.data);
+      if (depsRes.status === 'fulfilled') setDependents(depsRes.value.data.dependents || []);
+      if (plansRes.status === 'fulfilled') {
+        const list = plansRes.value.data.plans || [];
+        setPlans(list);
+        setSavedIds(new Set(list.map((p) => p.itemId?._id || p.itemId)));
+      }
     } catch (error) {
       console.error('Failed to load insurance overview:', error);
     } finally {
@@ -69,48 +80,12 @@ const InsuranceOverview = () => {
     fetchData();
   }, [includeFamily]);
 
-  // Rank insurance products against the user's recommended cover amounts,
-  // mirroring the "Recommended: ₹10L — this plan offers up to ₹15L" story.
+  // Rank insurance products against the user's real profile (age, occupation,
+  // income, family) plus their recommended cover amounts; show the top 4 so the
+  // overview feed leads with the policies that suit this user best.
   const rankedProducts = useMemo(() => {
-    if (!calculator || products.length === 0) return [];
-    return products
-      .map((p) => {
-        const tiers = [...p.coverTiers].sort((a, b) => a.coverAmount - b.coverAmount);
-        const maxTier = tiers[tiers.length - 1]?.coverAmount || 0;
-        const target =
-          p.category === 'health'
-            ? calculator.health?.amount
-            : p.category === 'term_life'
-            ? calculator.life?.amount
-            : 0;
-        const nearest = target > 0 ? tiers.find((t) => t.coverAmount >= target) : null;
-        const csr = p.claimSettlementRatio || 0;
-
-        let score = 35;
-        let reason = '';
-        if (p.category === 'health') {
-          reason = nearest
-            ? `Recommended ${inrLakhs(target)} cover — this plan offers up to ${inrLakhs(nearest.coverAmount)}`
-            : `Offers up to ${inrLakhs(maxTier)} health cover`;
-          score += nearest ? 25 : 10;
-        } else if (p.category === 'term_life') {
-          reason = nearest
-            ? `Your recommended life cover is ${inrLakhs(target)} — this plan provides up to ${inrLakhs(nearest.coverAmount)}`
-            : `Family income protection up to ${inrLakhs(maxTier)}`;
-          score += nearest ? 25 : 10;
-        } else if (p.category === 'accident') {
-          reason = `High claim settlement (${csr}%) for accidental death & disability`;
-          score += 12;
-        } else {
-          reason = `Vehicle cover with a ${csr}% claim settlement ratio`;
-          score += 8;
-        }
-        if (p.category === 'health' || p.category === 'term_life') score += csr / 10;
-        return { ...p, rank: Math.min(100, Math.round(score)), reason };
-      })
-      .sort((a, b) => b.rank - a.rank)
-      .slice(0, 4);
-  }, [products, calculator]);
+    return rankInsuranceProducts(products, calculator, user, calculator?.dependents).slice(0, 4);
+  }, [products, calculator, user]);
 
   const topSchemes = schemes.slice(0, 4);
 
@@ -146,6 +121,17 @@ const InsuranceOverview = () => {
   const healthScore = health?.score ?? null;
   const scoreColor =
     healthScore >= 70 ? 'text-emerald-400' : healthScore >= 40 ? 'text-amber-400' : 'text-red-400';
+
+  // Summary stats for the overview cards (saved plans + scheme matches)
+  const savedSummary = useMemo(() => {
+    const summary = { interested: 0, applied: 0, active: 0 };
+    (plans || []).forEach((p) => {
+      if (summary[p.status] !== undefined) summary[p.status] += 1;
+    });
+    return summary;
+  }, [plans]);
+  const matchedSchemeCount = schemes.length;
+  const highMatchCount = schemes.filter((s) => s.matchScore >= 70).length;
 
   return (
     <div className="space-y-6">
@@ -242,6 +228,171 @@ const InsuranceOverview = () => {
         </div>
       </div>
 
+{/* Insurance & scheme details of the user — profile, coverage needs, summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* User's insurance profile */}
+        <div className="glass-card p-6 space-y-4">
+          <h3 className="font-bold text-white text-sm flex items-center gap-2 pb-2 border-b border-white/5">
+            <User size={16} className="text-accent-start" /> Your Insurance Profile
+          </h3>
+          <div className="space-y-3 text-sm text-gray-300">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500 flex items-center gap-1.5">
+                <CalendarDays size={14} /> Age
+              </span>
+              <strong className="text-white">{user?.age ?? '—'} yrs</strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500 flex items-center gap-1.5">
+                <Briefcase size={14} /> Occupation
+              </span>
+              <strong className="text-white capitalize">
+                {user?.occupationType || '—'}
+                {user?.sector ? ` · ${user.sector}` : ''}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500 flex items-center gap-1.5">
+                <Wallet size={14} /> Income / month
+              </span>
+              <strong className="text-white">
+                {user
+                  ? `₹${(user.monthlyIncome || user.monthlyAllowance || 0).toLocaleString('en-IN')}`
+                  : '—'}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500 flex items-center gap-1.5">
+                <MapPin size={14} /> Region
+              </span>
+              <strong className="text-white">{user?.region || 'All India'}</strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500 flex items-center gap-1.5">
+                <Users size={14} /> Family members
+              </span>
+              <strong className="text-white">
+                {dependents.length} dependent{dependents.length === 1 ? '' : 's'}
+              </strong>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Link
+              to="/insurance/family"
+              className="btn-secondary flex-1 py-2 text-xs text-center font-semibold"
+            >
+              Manage Family
+            </Link>
+            <Link
+              to="/insurance/my-plans"
+              className="btn-secondary flex-1 py-2 text-xs text-center font-semibold"
+            >
+              My Plans
+            </Link>
+          </div>
+        </div>
+
+        {/* Recommended coverage needs */}
+        <div className="glass-card p-6 space-y-4">
+          <h3 className="font-bold text-white text-sm flex items-center gap-2 pb-2 border-b border-white/5">
+            <ShieldCheck size={16} className="text-accent-start" /> Recommended Coverage Needs
+          </h3>
+          <div className="space-y-3">
+            <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                  <Heart size={13} className="text-emerald-400" /> Health cover
+                </span>
+                <strong className="text-white">
+                  {calculator ? inrLakhs(calculator.health.amount) : '—'}
+                </strong>
+              </div>
+              {calculator && (
+                <ul className="mt-2 space-y-1">
+                  {calculator.health.breakdown.slice(0, 3).map((line, idx) => (
+                    <li key={idx} className="text-[10px] text-gray-500 flex gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0 mt-1.5" />
+                      <span className="line-clamp-1">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="p-3 rounded-xl bg-sky-500/5 border border-sky-500/20">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                  <Shield size={13} className="text-sky-400" /> Term life cover
+                </span>
+                <strong className="text-white">
+                  {calculator ? inrLakhs(calculator.life.amount) : '—'}
+                </strong>
+              </div>
+              {calculator && (
+                <ul className="mt-2 space-y-1">
+                  {calculator.life.breakdown.slice(0, 3).map((line, idx) => (
+                    <li key={idx} className="text-[10px] text-gray-500 flex gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-sky-400 shrink-0 mt-1.5" />
+                      <span className="line-clamp-1">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <Link
+            to="/insurance/calculator"
+            className="btn-secondary py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
+          >
+            Open Coverage Calculator <ArrowRight size={13} />
+          </Link>
+        </div>
+{/* User's insurance summary */}
+        <div className="glass-card p-6 space-y-4">
+          <h3 className="font-bold text-white text-sm flex items-center gap-2 pb-2 border-b border-white/5">
+            <BookmarkCheck size={16} className="text-accent-start" /> Your Coverage Summary
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <p className="text-2xl font-extrabold text-white">{matchedSchemeCount}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">
+                Matching Schemes
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <p className="text-2xl font-extrabold text-emerald-400">{highMatchCount}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">
+                High Match (≥70%)
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <p className="text-2xl font-extrabold text-white">{savedSummary.interested}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">
+                Saved / Interested
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <p className="text-2xl font-extrabold text-sky-400">{savedSummary.active}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">
+                Active Policies
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Link
+              to="/insurance/schemes"
+              className="btn-secondary flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1"
+            >
+              <Landmark size={13} /> Schemes
+            </Link>
+            <Link
+              to="/insurance/products"
+              className="btn-secondary flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1"
+            >
+              <ShieldCheck size={13} /> Insurance
+            </Link>
+          </div>
+        </div>
+      </div>
       {/* Urgency banner — FINNOVA's differentiator made visible */}
       {!loading && efProgressPct !== null && efProgressPct < 50 && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
@@ -256,7 +407,7 @@ const InsuranceOverview = () => {
       )}
 
       {/* Personalized combined feed */}
-      <div className="flex items-center justify-between mt-2">
+      <div className="flex items-center justify-between gap-4 mt-2 flex-wrap">
         <h2 className="text-lg font-bold text-white">Recommended for you</h2>
         <div className="flex items-center gap-3 text-xs text-gray-500">
           <span className="flex items-center gap-1">
@@ -265,6 +416,12 @@ const InsuranceOverview = () => {
           <span className="flex items-center gap-1">
             <ShieldCheck size={12} className="text-sky-400" /> Private Insurance
           </span>
+          <Link
+            to="/insurance/schemes"
+            className="text-accent-start hover:text-accent-end transition-colors flex items-center gap-1"
+          >
+            View all <ArrowRight size={12} />
+          </Link>
         </div>
       </div>
 
@@ -320,8 +477,12 @@ const InsuranceOverview = () => {
                       {item.claimSettlementRatio}% claim ratio
                     </span>
                   ) : (
-                    item.matchScore >= 70 && (
-                      <span className="ml-auto text-xs font-bold text-emerald-400">
+                    typeof item.matchScore === 'number' && (
+                      <span
+                        className={`ml-auto text-xs font-bold ${
+                          item.matchScore >= 70 ? 'text-emerald-400' : 'text-gray-400'
+                        }`}
+                      >
                         {item.matchScore}% match
                       </span>
                     )

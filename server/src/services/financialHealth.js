@@ -32,6 +32,10 @@ export const calculateFinancialHealth = async (userId) => {
     const expenses = await Expense.find({
       user: userId,
       date: { $gte: startOfMonth, $lt: endOfMonth },
+      // 'Savings' transfers (goal & emergency-fund contributions) are NOT
+      // consumption — they reduce available income but shouldn't lower the
+      // health score as if the money was spent.
+      category: { $ne: 'Savings' },
     });
     const totalSpent = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const spendingRatio = totalSpent / monthlyIncome;

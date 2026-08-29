@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Bookmark, CheckCircle, FileText, ListOrdered, Award, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Bookmark, CheckCircle, FileText, ListOrdered, Award, Sparkles, Loader2, Send } from 'lucide-react';
 import api from '../../services/api.js';
 import Skeleton from '../../components/ui/Skeleton.jsx';
 
@@ -134,6 +134,18 @@ const SchemeDetail = () => {
             )}
           </button>
 
+          {scheme.applyOnline && scheme.applyLink && (
+            <a
+              href={scheme.applyLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary py-2 px-4 text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 shadow-glow"
+            >
+              <Send size={12} />
+              Apply Online
+            </a>
+          )}
+
           <a
             href={scheme.officialLink}
             target="_blank"
@@ -155,6 +167,19 @@ const SchemeDetail = () => {
           <span className="text-xs px-2.5 py-0.5 rounded-full border bg-accent-start/20 text-accent-start border-accent-start/30 font-medium capitalize">
             {getCategoryLabel(scheme.category)}
           </span>
+        </div>
+
+        {/* Online application status */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {scheme.applyOnline && scheme.applyLink ? (
+            <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold">
+              <CheckCircle size={13} /> Online application available — use the "Apply Online" button above
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400 font-medium">
+              Applied offline — follow the "How to Apply" steps below
+            </span>
+          )}
         </div>
 
         <h1 className="text-2xl md:text-3xl font-extrabold text-white leading-tight">

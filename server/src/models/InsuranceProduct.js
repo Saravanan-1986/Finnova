@@ -64,6 +64,20 @@ const insuranceProductSchema = new mongoose.Schema(
       required: [true, 'Official link is required'],
       trim: true,
     },
+    // Weekly refresh tracking: details are re-verified from the official site every 7 days
+    lastRefreshedAt: {
+      type: Date,
+      default: null,
+    },
+    refreshStatus: {
+      type: String,
+      enum: ['pending', 'ok', 'unreachable', 'error'],
+      default: 'pending',
+    },
+    httpStatusCode: {
+      type: Number,
+      default: null,
+    },
   },
   {
     timestamps: true,

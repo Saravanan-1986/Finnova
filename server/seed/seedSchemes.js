@@ -880,6 +880,39 @@ const schemes = [
   },
 ];
 
+// Schemes that can be applied for online, mapped to their application portal.
+// Anything not listed here is applied in person (post office / bank branch / camp).
+const ONLINE_APPLY = {
+  'Ayushman Bharat Pradhan Mantri Jan Arogya Yojana (PM-JAY)': 'https://pmjay.gov.in/beneficiary',
+  'Pradhan Mantri Jeevan Jyoti Bima Yojana (PMJJBY)': 'https://www.jansuraksha.gov.in',
+  'Pradhan Mantri Suraksha Bima Yojana (PMSBY)': 'https://www.jansuraksha.gov.in',
+  'Atal Pension Yojana (APY)': 'https://enps.nsdl.com',
+  'Pradhan Mantri Fasal Bima Yojana (PMFBY)': 'https://pmfby.gov.in',
+  'National Pension System (NPS)': 'https://enps.nsdl.com',
+  'Pudhumai Penn Scheme': 'https://www.pudhumapenn.tn.gov.in',
+  'Kalaignar Magalir Urimai Thittam': 'https://www.tn.gov.in',
+  'Pradhan Mantri Awas Yojana - Urban (PMAY-U)': 'https://pmay-urban.gov.in',
+  'Pradhan Mantri Shram Yogi Maan-dhan (PM-SYM)': 'https://maandhan.in',
+  'PM Kisan Samman Nidhi (PM-KISAN)': 'https://pmkisan.gov.in',
+  'Gruha Lakshmi Scheme (Karnataka)': 'https://sevasindhu.karnataka.gov.in',
+  'Rythu Bandhu Scheme (Telangana)': 'https://rythubandhu.telangana.gov.in',
+  'Ladli Behna Yojana (Madhya Pradesh)': 'https://cmladlibahna.mp.gov.in',
+  'Kanyashree Prakalpa (West Bengal)': 'https://www.wbkanyashree.gov.in',
+  'Central Sector Scheme of Scholarship for College Students': 'https://scholarships.gov.in',
+  'Mukhyamantri Amrutum Yojana (MA)': 'https://magujarat.in',
+  'Biju Swasthya Kalyan Yojana (BSKY)': 'https://bsky.odisha.gov.in',
+  'Pradhan Mantri Matru Vandana Yojana (PMMVY)': 'https://wcd.gov.in',
+  'Pradhan Mantri Jan Dhan Yojana (PMJDY)': 'https://pmjdy.gov.in',
+  'Mahatma Gandhi National Rural Employment Guarantee Act (MGNREGA)': 'https://nrega.nic.in',
+  'Rashtriya Swasthya Bima Yojana (RSBY)': 'http://www.rsby.gov.in',
+};
+
+schemes.forEach((scheme) => {
+  const applyLink = ONLINE_APPLY[scheme.name];
+  scheme.applyOnline = Boolean(applyLink);
+  scheme.applyLink = applyLink || '';
+});
+
 async function seed() {
   try {
     const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/finnova';

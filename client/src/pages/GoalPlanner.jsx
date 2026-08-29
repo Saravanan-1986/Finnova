@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Target, Loader2, TrendingUp } from 'lucide-react';
+import { Plus, Target, Loader2, TrendingUp, History, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getCurrencySymbol } from '../constants/categories.js';
@@ -90,6 +90,9 @@ const GoalPlanner = () => {
     }
   };
 
+  // Contribution history expand state
+  const [openHistory, setOpenHistory] = useState(null);
+
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
       month: 'short',
@@ -176,6 +179,43 @@ const GoalPlanner = () => {
                 <TrendingUp size={16} />
                 Add Contribution
               </button>
+
+              {/* Contribution history */}
+              {goal.contributions && goal.contributions.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/5">
+                  <button
+                    onClick={() => setOpenHistory(openHistory === goal._id ? null : goal._id)}
+                    className="flex items-center justify-between w-full text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <History size={13} />
+                      Contribution History ({goal.contributions.length})
+                    </span>
+                    {openHistory === goal._id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  {openHistory === goal._id && (
+                    <ul className="mt-3 space-y-2">
+                      {[...goal.contributions]
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .map((c, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-center justify-between text-xs bg-white/5 rounded-lg px-3 py-2"
+                          >
+                            <span className="text-gray-400">
+                              {formatDate(c.date)}
+                            </span>
+                            <span className="font-semibold text-white">
+                              {currency}
+                              {Number(c.amount).toLocaleString('en-IN')}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -250,6 +290,11 @@ const GoalPlanner = () => {
               className="input-field"
               autoFocus
             />
+            <p className="text-[11px] text-gray-500 mt-2 flex items-start gap-1.5">
+              <TrendingUp size={12} className="shrink-0 mt-0.5 text-accent-start" />
+              This amount is saved to this goal's contribution history, deducted from your
+              monthly income, and appears under "Savings" in Spending History.
+            </p>
           </div>
           <button type="submit" disabled={contributing} className="btn-primary w-full flex items-center justify-center gap-2">
             {contributing && <Loader2 size={18} className="animate-spin" />}

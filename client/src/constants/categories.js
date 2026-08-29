@@ -10,6 +10,9 @@ export const EXPENSE_CATEGORIES = [
   { value: 'Utilities', icon: 'zap' },
   { value: 'Travel', icon: 'plane' },
   { value: 'Groceries', icon: 'shopping-cart' },
+  { value: 'Savings', icon: 'piggy-bank' },
+  { value: 'Bills & EMI', icon: 'credit-card' },
+  { value: 'Insurance', icon: 'shield' },
   { value: 'Other', icon: 'more-horizontal' },
 ];
 
