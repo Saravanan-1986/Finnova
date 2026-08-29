@@ -56,12 +56,18 @@ const getOrCreateEmergencyFund = async (userId) => {
 
 // Helper: build the enriched emergency fund response
 const buildFundResponse = async (fund, user) => {
+  const monthlyIncome = user.monthlyIncome || user.monthlyAllowance || 0;
   const avgMonthlySpending = await getAverageMonthlySpending(user._id);
-  const monthlySpending =
-    avgMonthlySpending !== null ? avgMonthlySpending : (user.monthlyIncome || user.monthlyAllowance || 0) * 0.3;
 
-  const target3 = Math.round(monthlySpending * 3);
-  const target6 = Math.round(monthlySpending * 6);
+  // Targets are 3 or 6 months of INCOME (e.g. ₹500/month income → ₹1,500 for
+  // the 3-month target, ₹3,000 for the 6-month target). If the user hasn't
+  // set an income yet, fall back to their average monthly spending so the
+  // recommendation still reflects a real number.
+  const basis = monthlyIncome > 0 ? 'income' : 'spending';
+  const monthlyBasis = monthlyIncome > 0 ? monthlyIncome : avgMonthlySpending || 0;
+
+  const target3 = Math.round(monthlyBasis * 3);
+  const target6 = Math.round(monthlyBasis * 6);
   const targetMonths = fund.targetMonths || 3;
   const activeTarget = targetMonths === 6 ? target6 : target3;
 
@@ -73,7 +79,8 @@ const buildFundResponse = async (fund, user) => {
 
   return {
     ...fund.toObject(),
-    monthlySpending: Math.round(monthlySpending),
+    monthlyBasis: Math.round(monthlyBasis),
+    basis,
     target3Months: target3,
     target6Months: target6,
     activeTargetMonths: targetMonths,

@@ -83,7 +83,7 @@ npm run dev:client
 - **Spending History** — Add expenses, browse by month
 - **Bills & EMI** — Track recurring bills & EMIs, mark as paid
 - **Goal Planner** — Savings goals with progress & contributions
-- **Emergency Fund** — Auto-created safety net (3–6 months of spending)
+- **Emergency Fund** — Auto-created safety net (3–6 months of income)
 - **Coming Soon** — Subscription Tracker & AI Assistant placeholders
 
 ## API Summary

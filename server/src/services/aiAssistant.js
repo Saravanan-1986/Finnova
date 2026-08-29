@@ -408,7 +408,7 @@ const localReply = (message, ctx) => {
     useLabel('financial health score');
     if (!ctx.emergencyFund) {
       return {
-        text: `${sparseNote('an emergency fund yet')}\n\nBest practice: save 3\u20136 months of expenses into an Emergency Fund goal before aggressively investing.`,
+        text: `${sparseNote('an emergency fund yet')}\n\nBest practice: save 3\u20136 months of income into an Emergency Fund goal before aggressively investing.`,
         used,
       };
     }
@@ -425,7 +425,7 @@ const localReply = (message, ctx) => {
       text += `To close it in ~6 months, set aside about ${formatINR(suggestedMonthly)}/month.\n`;
       text += 'Tip: pay this first — a funded emergency fund is your cheapest "insurance".';
     } else {
-      text += 'You are fully funded. Consider topping it to 6 months of expenses if you have dependents, then redirect savings to goals/insurance.';
+      text += 'You are fully funded. Consider topping it to 6 months of income if you have dependents, then redirect savings to goals/insurance.';
     }
     return { text, used };
   }

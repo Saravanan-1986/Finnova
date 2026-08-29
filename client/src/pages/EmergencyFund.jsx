@@ -86,8 +86,9 @@ const EmergencyFund = () => {
                 <div>
                   <h2 className="font-semibold text-white">Safety Net</h2>
                   <p className="text-xs text-gray-500">
-                    Based on your avg monthly spending of {currency}
-                    {fund.monthlySpending.toLocaleString('en-IN')}
+                    {fund.basis === 'income' ? 'Based on your monthly income of' : 'Based on your avg monthly spending of'}{' '}
+                    {currency}
+                    {fund.monthlyBasis.toLocaleString('en-IN')}
                   </p>
                 </div>
               </div>
@@ -137,7 +138,7 @@ const EmergencyFund = () => {
                 <div className="flex justify-between mt-1.5 text-xs">
                   <span className="text-gray-500">{Math.round(fund.progress)}% complete</span>
                   <span className="text-accent-end font-medium">
-                    Target range: {currency}
+                    {fund.basis === 'income' ? '3–6 months of income:' : '3–6 months of spending:'} {currency}
                     {fund.target3Months.toLocaleString('en-IN')} – {currency}
                     {fund.target6Months.toLocaleString('en-IN')}
                   </span>
@@ -195,9 +196,9 @@ const EmergencyFund = () => {
               <div>
                 <h3 className="font-medium text-white mb-1">Why 3–6 months?</h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Financial experts recommend keeping 3 to 6 months of essential expenses in an
-                  easily accessible account. This covers unexpected job loss, medical emergencies,
-                  or major repairs without derailing your long-term goals.
+                  Financial experts recommend keeping 3 to 6 months of your income in an easily
+                  accessible account. This covers unexpected job loss, medical emergencies, or
+                  major repairs without derailing your long-term goals.
                 </p>
               </div>
             </div>

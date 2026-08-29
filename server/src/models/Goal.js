@@ -33,7 +33,7 @@ const goalSchema = new mongoose.Schema(
       enum: ['goal', 'emergency_fund'],
       default: 'goal',
     },
-    // Only used for emergency_fund: 3 or 6 months of spending
+    // Only used for emergency_fund: 3 or 6 months of income
     targetMonths: {
       type: Number,
       enum: [3, 6],
