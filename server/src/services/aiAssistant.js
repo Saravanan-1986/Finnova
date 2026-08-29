@@ -2,14 +2,16 @@
  * FINNOVA AI Assistant Service
  *
  * Data-grounded assistant: every reply is computed from the authenticated user's REAL
- * database records (expenses, goals, emergency fund, bills/EMIs, saved plans, scheme
- * matches) — never from stale or frontend-supplied context.
+ * database records (profile, expenses & spending history, goals, emergency fund,
+ * bills/EMIs including overdue, family dependents, saved plans with their live
+ * status, scheme matches) — never from stale or frontend-supplied context.
  *
  * Provider abstraction: `callLLM` tries, in order:
  *   1. Google Gemini  (GEMINI_API_KEY in .env)
  *   2. OpenAI         (OPENAI_API_KEY in .env)
  *   3. Local rule-based fallback  (keeps the demo functional & honest even with no key)
  */
+import mongoose from 'mongoose';
 import Expense from '../models/Expense.js';
 import Goal from '../models/Goal.js';
 import BillEmi from '../models/BillEmi.js';
@@ -129,23 +131,109 @@ export const buildContextObject = async (userId) => {
   const emergencyFund = await getEmergencyFund(userId);
   const health = await calculateFinancialHealth(userId);
 
-  // --- saved plans (populated names) ---
+  // --- saved plans (schemes & insurance, with live status + product details) ---
   const savedPlanDocs = await SavedPlan.find({ user: userId })
     .populate({ path: 'itemId', refPath: 'itemTypeModel' })
     .sort({ savedAt: -1 });
-  const savedInsurancePlans = savedPlanDocs
+  const savedPlans = savedPlanDocs
     .filter((p) => p.itemId)
-    .map((p) => ({
-      itemType: p.itemType,
-      status: p.status,
-      name: p.itemId.name || p.itemId.title || 'Plan',
-    }));
+    .slice(0, 10)
+    .map((p) => {
+      const item = p.itemId;
+      const base = {
+        itemType: p.itemType,
+        status: p.status, // interested | applied | active
+        name: item.name || item.title || 'Plan',
+        savedAt: new Date(p.savedAt).toISOString().slice(0, 10),
+      };
+      if (p.itemType === 'insurance') {
+        const tiers = (item.coverTiers || []).map((t) => ({
+          cover: t.coverAmount,
+          annualPremium: t.indicativeAnnualPremium,
+        }));
+        return {
+          ...base,
+          insurer: item.insurer,
+          category: item.category,
+          coverTiers: tiers,
+          claimSettlementRatio: item.claimSettlementRatio,
+          keyFeatures: (item.keyFeatures || []).slice(0, 3),
+          officialLink: item.officialLink,
+        };
+      }
+      return {
+        ...base,
+        issuer: item.issuer,
+        category: item.category,
+        benefits: (item.benefits || []).slice(0, 3),
+        applyOnline: item.applyOnline,
+        officialLink: item.officialLink,
+      };
+    });
+
+  // --- family dependents (drive insurance cover recommendations) ---
+  const dependents = await Dependent.find({ user: userId }).sort({ createdAt: 1 });
+  const dependentList = dependents.map((d) => ({ name: d.name, relation: d.relation, age: d.age }));
+
+  // --- spending history: 3-month view + all-time totals + recent transactions ---
+  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  const [recentExpenseDocs, historyExpenses, allTimeAgg] = await Promise.all([
+    Expense.find({ user: userId }).sort({ date: -1 }).limit(5),
+    Expense.find({
+      user: userId,
+      date: { $gte: threeMonthsAgo },
+      category: { $nin: ['Savings', 'Bills & EMI'] },
+    }),
+    Expense.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(String(userId)) } },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+  ]);
+  const historyMonths = new Set();
+  historyExpenses.forEach((e) => historyMonths.add(`${e.date.getFullYear()}-${e.date.getMonth()}`));
+  const historyTotal = historyExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const historyCatMap = {};
+  historyExpenses.forEach((e) => {
+    historyCatMap[e.category] = (historyCatMap[e.category] || 0) + (e.amount || 0);
+  });
+  const spendingHistory = {
+    hasData: historyExpenses.length > 0 || recentExpenseDocs.length > 0,
+    avgMonthlySpend3Months: historyMonths.size > 0 ? Math.round(historyTotal / historyMonths.size) : 0,
+    topCategories3Months: Object.entries(historyCatMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([category, amount]) => ({ category, amount })),
+    totalAllTime: allTimeAgg[0]?.total || 0,
+    expenseCountAllTime: allTimeAgg[0]?.count || 0,
+    recentExpenses: recentExpenseDocs.map((e) => ({
+      description: e.description || e.category,
+      category: e.category,
+      amount: e.amount,
+      date: new Date(e.date).toISOString().slice(0, 10),
+    })),
+  };
+
+  // --- full dues picture: overdue items + total outstanding (beyond the 15-day window) ---
+  const allPendingDues = await BillEmi.find({ user: userId, status: { $ne: 'paid' } }).sort({ dueDate: 1 });
+  const billsSummary = {
+    pendingCount: allPendingDues.length,
+    totalOutstanding: allPendingDues.reduce((s, r) => s + (r.amount || 0), 0),
+    overdue: allPendingDues
+      .filter((r) => new Date(r.dueDate) < now)
+      .slice(0, 5)
+      .map((r) => ({
+        type: r.type,
+        title: r.title,
+        amount: r.amount,
+        dueDate: new Date(r.dueDate).toISOString().slice(0, 10),
+        daysOverdue: Math.max(1, Math.ceil((now - new Date(r.dueDate)) / DAY_MS)),
+      })),
+  };
 
   // --- fresh top scheme matches ---
   const topSchemeMatches = await computeTopSchemeMatches(user);
 
   // --- recommended cover amounts ---
-  const dependents = await Dependent.find({ user: userId });
   const totalSavings = goals.reduce((s, g) => s + (g.savedAmount || 0), 0) + (emergencyFund?.savedAmount || 0);
   const coverRecs = recommendedCoverAmount(user, dependents, totalDueNext15Days, totalSavings);
 
@@ -155,8 +243,15 @@ export const buildContextObject = async (userId) => {
       age: user.age ?? null,
       gender: user.gender || 'unknown',
       occupationType: user.occupationType || 'not-set',
+      occupationDetail:
+        user.occupationType === 'student'
+          ? { college: user.college || 'not-set', monthlyAllowance: user.monthlyAllowance || 0 }
+          : { sector: user.sector || 'not-set' },
       monthlyIncome: income,
+      monthlyAllowance: user.monthlyAllowance || 0,
       region: user.region || 'not-set',
+      currency: user.currency || 'INR',
+      memberSince: user.createdAt ? new Date(user.createdAt).toISOString().slice(0, 10) : null,
     },
     thisMonth: {
       hasData: monthlyExpenses.length > 0,
@@ -174,7 +269,10 @@ export const buildContextObject = async (userId) => {
     goals: goalList,
     emergencyFund,
     financialHealthScore: health,
-    savedInsurancePlans,
+    savedPlans,
+    dependents: dependentList,
+    spendingHistory,
+    bills: billsSummary,
     topSchemeMatches,
     recommendedCover: {
       health: coverRecs.health.amount,
@@ -202,7 +300,11 @@ export const populatedContextLabels = (ctx) => {
   if (ctx.goals?.length) labels.push('savings goals');
   if (ctx.emergencyFund) labels.push('emergency fund');
   if (typeof ctx.financialHealthScore?.score === 'number') labels.push('financial health score');
-  if (ctx.savedInsurancePlans?.length) labels.push('your saved plans');
+  if (ctx.savedPlans?.length) labels.push('your saved plans');
+  if (ctx.dependents?.length) labels.push('family dependents');
+  if (ctx.spendingHistory?.hasData) labels.push('spending history');
+  if (ctx.bills?.overdue?.length) labels.push('overdue dues');
+  if ((ctx.bills?.pendingCount || 0) > 0) labels.push('total outstanding dues');
   if (ctx.topSchemeMatches?.length) labels.push('matching schemes');
   if ((ctx.recommendedCover?.health || 0) > 0 || (ctx.recommendedCover?.life || 0) > 0) labels.push('recommended cover amounts');
   return labels;
@@ -214,11 +316,12 @@ export const populatedContextLabels = (ctx) => {
 
 export const buildSystemPrompt = (context) => {
   const ctxJson = JSON.stringify(context, null, 2);
-  return `You are FINNOVA's financial assistant, a personal finance advisor inside a personal finance app. Answer using ONLY the user data provided below plus general financial literacy knowledge. Be specific — cite actual numbers from their data (e.g. "You have ₹X left this month, and your EMI of ₹Y is due in 5 days"). If asked about something outside personal finance, redirect politely back to money topics. Never invent numbers that are not present in the context. Keep answers concise and actionable (150 words or fewer).
+  return `You are FINNOVA's financial assistant — a personal finance advisor inside the FINNOVA app who knows the user's account in detail. You can answer ANY question about the user's own data provided below: their profile (age, gender, occupation/college/sector, income or allowance, region, member-since), spending history (3-month average, top categories, recent transactions, all-time totals), pending and overdue bills & EMIs with total outstanding, savings goals, emergency fund, family dependents, saved plans (government schemes and insurance products with their live status: interested / applied / active, plus insurer, cover tiers, premiums, benefits), recommended insurance cover, top-matching schemes, and their financial health score. Be specific — cite actual numbers from their data (e.g. "You have ₹X left this month, and your EMI of ₹Y is due in 5 days"). For saved-plan questions, group by status with active plans first. If asked about something outside personal finance, redirect politely back to money topics. Never invent numbers that are not present in the context. Keep answers concise and actionable (150 words or fewer).
 
 GUARDRAILS:
 - If the relevant user data is missing or sparse (e.g. no expenses recorded yet, no goals, no emergency fund, brand-new account), explicitly acknowledge that you don't have data on that yet and give general best-practice guidance instead of fabricating specifics.
 - Insurance premiums are indicative only — advise the user to verify with the insurer before purchasing.
+- Saved plans carry a status (interested / applied / active) — quote it accurately when the user asks what they own, applied for, or have activated.
 - Do not claim to replace professional tax/legal advice.
 
 USER DATA CONTEXT (JSON — fetched live from their account):
@@ -356,8 +459,37 @@ const localReply = (message, ctx) => {
       used,
     };
   }
+  // --- 1b. Profile / what do you know about me ---
+  if (/who am i|my profile|about me|what do you know about|my (age|gender|occupation|income|allowance|region|college|sector|details)/.test(msg)) {
+    useLabel('income profile');
+    const p = ctx.profile;
+    const occupation =
+      p.occupationType === 'student'
+        ? `student${p.occupationDetail?.college && p.occupationDetail.college !== 'not-set' ? ` at ${p.occupationDetail.college}` : ''}`
+        : p.occupationType === 'professional'
+          ? `professional${p.occupationDetail?.sector && p.occupationDetail.sector !== 'not-set' ? ` in ${p.occupationDetail.sector}` : ''}`
+          : 'not set';
+    const lines = [
+      `Name: ${p.name}`,
+      `Age: ${p.age ?? 'not set'} | Gender: ${p.gender}`,
+      `Occupation: ${occupation}`,
+      p.monthlyIncome > 0 ? `Monthly income: ${formatINR(p.monthlyIncome)}` : 'Monthly income: not set yet',
+      p.monthlyAllowance > 0 ? `Monthly allowance: ${formatINR(p.monthlyAllowance)}` : null,
+      `Region: ${p.region} | Member since: ${p.memberSince || 'unknown'}`,
+    ].filter(Boolean);
+    if (ctx.dependents?.length) {
+      useLabel('family dependents');
+      lines.push(`Dependents: ${ctx.dependents.map((d) => `${d.name} (${d.relation}, ${d.age})`).join(', ')}`);
+    }
+    let text = `Here's what I know about you from your FINNOVA account:\n${bullet(lines)}`;
+    if (p.monthlyIncome === 0 && p.monthlyAllowance === 0) {
+      text += `\n\nTip: set your monthly income/allowance in your profile so I can size your emergency fund and insurance cover precisely.`;
+    }
+    return { text, used };
+  }
+
 // --- 2. Safe weekly spend / budget ---
-  if (/spend|budget|safe|week|left|afford|allowance/.test(msg)) {
+  if (/spend|budget|safe|week|left|afford|allowance|recent|transaction|last month/.test(msg)) {
     useLabel('this month\u2019s spending');
     if (!ctx.thisMonth.hasData) {
       return {
@@ -378,6 +510,49 @@ const localReply = (message, ctx) => {
     if (topCat) {
       text += `\n\nYour biggest category so far is ${topCat.category} at ${formatINR(topCat.amount)}. Consider trimming it first if you need breathing room.`;
     }
+    const hist = ctx.spendingHistory;
+    if (hist?.hasData) {
+      useLabel('spending history');
+      text += `\n\nLonger view: your average spend over the last 3 months is ${formatINR(hist.avgMonthlySpend3Months)} (${hist.expenseCountAllTime} expense(s) recorded all-time, totalling ${formatINR(hist.totalAllTime)}).`;
+      if (hist.recentExpenses?.length) {
+        useLabel('recent transactions');
+        const recent = hist.recentExpenses
+          .slice(0, 3)
+          .map((e) => `${e.description} (${e.category}, ${e.date}) — ${formatINR(e.amount)}`);
+        text += `\nRecent transactions:\n${bullet(recent)}`;
+      }
+    }
+    return { text, used };
+  }
+
+  // --- 4b. Saved plans (schemes & insurance, with live status) ---
+  if (/saved plan|my plan|what plans|plans i|plan status|saved insur|saved scheme|policies|active (plan|policy|insur|scheme)|applied (plan|policy|scheme)|have i (saved|activated|applied)|what.*(saved|activated|applied)/.test(msg)) {
+    const plans = ctx.savedPlans || [];
+    if (plans.length === 0) {
+      return {
+        text: `You haven't saved any plans yet. Browse the Insurance Marketplace or Government Schemes pages and tap "Save" — anything you save (interested / applied / active) lands in My Plans, and I can then track and advise on it.`,
+        used,
+      };
+    }
+    useLabel('your saved plans');
+    const describe = (p) => {
+      if (p.itemType === 'insurance') {
+        const tiers = p.coverTiers || [];
+        const maxCover = tiers.length ? Math.max(...tiers.map((t) => t.cover)) : null;
+        const minPremium = tiers.length ? Math.min(...tiers.map((t) => t.annualPremium)) : null;
+        return `${p.name} by ${p.insurer}${maxCover ? ` (cover up to ${formatINR(maxCover)}, premium from ${formatINR(minPremium)}/yr)` : ''}`;
+      }
+      return `${p.name} (${p.issuer})${p.benefits?.length ? ` — ${p.benefits[0]}` : ''}`;
+    };
+    const group = (status) => plans.filter((p) => p.status === status);
+    const active = group('active');
+    const applied = group('applied');
+    const interested = group('interested');
+    let text = `You have ${plans.length} saved plan(s):\n`;
+    if (active.length) text += `\nACTIVE:\n${bullet(active.map(describe))}\n`;
+    if (applied.length) text += `\nAPPLIED:\n${bullet(applied.map(describe))}\n`;
+    if (interested.length) text += `\nINTERESTED:\n${bullet(interested.map(describe))}\n`;
+    text += `\nTip: mark a plan "Active" in My Plans once purchased — I weigh active cover when recommending what's still missing.`;
     return { text, used };
   }
 
@@ -386,7 +561,7 @@ const localReply = (message, ctx) => {
     useLabel('savings goals');
     if (ctx.goals.length === 0) {
       return {
-        text: `${sparseNote('any savings goals yet')}\n\nA simple starting point: automate 10\u201320% of income into a goal (e.g. a trip, gadget, or down payment) in Goal Planner.`,
+        text: `${sparseNote('any savings goals')}\n\nA simple starting point: automate 10\u201320% of income into a goal (e.g. a trip, gadget, or down payment) in Goal Planner.`,
         used,
       };
     }
@@ -429,6 +604,7 @@ const localReply = (message, ctx) => {
     }
     return { text, used };
   }
+
 // --- 5. Government scheme recommendation ---
   if (/scheme|yojana|government|subsidy|welfare|priorit|recommend/.test(msg)) {
     useLabel('matching schemes');
@@ -446,6 +622,32 @@ const localReply = (message, ctx) => {
     const ef = ctx.emergencyFund;
     if (ef && ef.progressPct < 50) {
       text += `\n\nSince your emergency fund is only ${ef.progressPct}% funded, I'd start with the health/accident option — that protective layer matters most right now.`;
+    }
+    return { text, used };
+  }
+
+  // --- 7b. Financial health score (before insurance: "financial health" must not hit the bare /health/ in the insurance regex) ---
+  if (/health score|score|how healthy|financial health|doing financially/.test(msg)) {
+    useLabel('financial health score');
+    useLabel('this month\u2019s spending');
+    useLabel('upcoming bills & EMIs');
+    useLabel('savings goals');
+    useLabel('emergency fund');
+    const f = ctx.financialHealthScore?.factors;
+    const score = ctx.financialHealthScore?.score;
+    let text = `Your composite financial health score is ${score}/100 — built from your real FINNOVA data:\n`;
+    const rows = [];
+    if (f) {
+      rows.push(`Spending-to-income: ${Math.round((f.spendingRatio || 0) * 100)}% of income spent this month (lower is healthier)`);
+      rows.push(`Emergency fund: ${Math.round((f.emergencyFundProgress || 0) * 100)}% funded`);
+      rows.push(`EMI/bill burden: ${Math.round((f.emiBurdenRatio || 0) * 100)}% of income committed to dues`);
+      rows.push(`Goal consistency: ${Math.round((f.goalConsistency || 0) * 100)}% average goal progress`);
+    }
+    text += `${bullet(rows)}`;
+    if (score < 60) {
+      text += `\n\nBelow 60 means some protective layers are thin — the emergency fund is usually the highest-leverage fix first.`;
+    } else {
+      text += `\n\nThat's a healthy posture — keep automating savings and it will only improve.`;
     }
     return { text, used };
   }
@@ -472,13 +674,29 @@ const localReply = (message, ctx) => {
     text += 'These are indicative figures — please verify the actual premium with the insurer before purchasing.';
     return { text, used };
   }
+  // --- 6b. Dependents / family ---
+  if (/dependent|family|spouse|wife|husband|kids?|children|parents?/.test(msg)) {
+    useLabel('family dependents');
+    if (!ctx.dependents?.length) {
+      return {
+        text: `I don't see any dependents in your profile yet. Add them under Insurance → Dependents — each dependent directly increases the health & term-life cover I recommend for you.`,
+        used,
+      };
+    }
+    const lines = ctx.dependents.map((d) => `${d.name} — ${d.relation}, ${d.age} yr(s)`);
+    const rec = ctx.recommendedCover || {};
+    let text = `Your dependents:\n${bullet(lines)}\n\nWith ${ctx.dependents.length} dependent(s), my cover recommendation is: health ${formatINR(rec.health || 0)}, term life ${formatINR(rec.life || 0)}.`;
+    return { text, used };
+  }
+
 // --- 7. EMIs / bills / dues / debt ---
-  if (/emi|bill|due|debt|loan|lend|outstanding|payment/.test(msg)) {
+  if (/emi|bill|due|owe|debt|loan|lend|outstanding|payment/.test(msg)) {
     useLabel('upcoming bills & EMIs');
     useLabel('financial health score');
-    if (!ctx.upcomingDues.hasData) {
+    const billsSummary = ctx.bills || { totalOutstanding: 0, pendingCount: 0, overdue: [] };
+    if (!ctx.upcomingDues.hasData && billsSummary.pendingCount === 0) {
       return {
-        text: `Good news — no bills or EMIs are due in the next 15 days.\n\n(Your financial health score factors in your bill-to-income ratio, so I'll warn you if that tightens.)`,
+        text: `Good news — nothing is pending at all: no bills or EMIs due in the next 15 days and zero outstanding.`,
         used,
       };
     }
@@ -491,6 +709,17 @@ const localReply = (message, ctx) => {
     });
     let text = `Here's what's hitting your account in the next 15 days:\n${bullet(lines)}\n`;
     text += `Total: ${formatINR(ctx.upcomingDues.totalDueNext15Days)}\n`;
+    if (billsSummary.overdue?.length) {
+      useLabel('overdue dues');
+      const od = billsSummary.overdue.map(
+        (o) => `${o.type === 'emi' ? 'EMI' : 'Bill'} ${o.title}: ${formatINR(o.amount)} — ${o.daysOverdue} day(s) OVERDUE`
+      );
+      text += `\nOverdue (clear these first):\n${bullet(od)}\n`;
+    }
+    if (billsSummary.totalOutstanding > ctx.upcomingDues.totalDueNext15Days) {
+      useLabel('total outstanding dues');
+      text += `Total outstanding across ALL pending bills/EMIs: ${formatINR(billsSummary.totalOutstanding)} (${billsSummary.pendingCount} item(s)).\n`;
+    }
     const income = ctx.thisMonth.monthlyIncome || 1;
     const ratio = ctx.upcomingDues.totalDueNext15Days / income;
     if (ratio > 0.4) {
@@ -500,41 +729,20 @@ const localReply = (message, ctx) => {
     return { text, used };
   }
 
-  // --- 8. Financial health score ---
-  if (/health score|score|how healthy|financial health|doing financially/.test(msg)) {
-    useLabel('financial health score');
-    useLabel('this month\u2019s spending');
-    useLabel('upcoming bills & EMIs');
-    useLabel('savings goals');
-    useLabel('emergency fund');
-    const f = ctx.financialHealthScore?.factors;
-    const score = ctx.financialHealthScore?.score;
-    let text = `Your composite financial health score is ${score}/100 — built from your real FINNOVA data:\n`;
-    const rows = [];
-    if (f) {
-      rows.push(`Spending-to-income: ${Math.round((f.spendingRatio || 0) * 100)}% of income spent this month (lower is healthier)`);
-      rows.push(`Emergency fund: ${Math.round((f.emergencyFundProgress || 0) * 100)}% funded`);
-      rows.push(`EMI/bill burden: ${Math.round((f.emiBurdenRatio || 0) * 100)}% of income committed to dues`);
-      rows.push(`Goal consistency: ${Math.round((f.goalConsistency || 0) * 100)}% average goal progress`);
-    }
-    text += `${bullet(rows)}`;
-    if (score < 60) {
-      text += `\n\nBelow 60 means some protective layers are thin — the emergency fund is usually the highest-leverage fix first.`;
-    } else {
-      text += `\n\nThat's a healthy posture — keep automating savings and it will only improve.`;
-    }
-    return { text, used };
-  }
 // --- 9. Generic help / what can you do ---
   if (/help|what can you|what do you|how do you|options/.test(msg)) {
     return {
       text:
         'I can answer from your actual FINNOVA data. Ask me about:\n' +
         bullet([
+          'Your profile ("what do you know about me?")',
           'A safe weekly budget ("how much can I spend this week?")',
+          'Recent spending ("what did I spend on recently?")',
           'Goal tracking ("am I on track for my trip goal?")',
           'Your emergency fund ("what should I do about my emergency fund?")',
-          'Bills & EMIs ("what is due in the next 15 days?")',
+          'Bills & EMIs incl. overdue ("what do I owe in total?")',
+          'Your saved plans & policies ("which insurance plans have I saved or activated?")',
+          'Dependents ("who are my dependents?")',
           'Schemes to prioritize ("which government scheme should I prioritize?")',
           'Insurance cover ("what health/life cover do I need?")',
           'Your overall score ("how is my financial health?")',
@@ -548,10 +756,11 @@ const localReply = (message, ctx) => {
     text:
       "I want to make sure I give you something useful from your actual data. Try one of these:\n" +
       bullet([
+        '"What do you know about me?"',
         '"How much can I safely spend this week?"',
         '"Am I on track for my goals?"',
         '"What should I do about my emergency fund?"',
-        '"Which government scheme should I prioritize?"',
+        '"Which insurance plans have I saved or activated?"',
         '"What is due in the next 15 days?"',
       ]),
     used,
