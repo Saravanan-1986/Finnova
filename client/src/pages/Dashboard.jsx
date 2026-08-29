@@ -47,31 +47,31 @@ const Dashboard = () => {
       </div>
 
       {/* Income left card */}
-      <div className="glass-card p-6 relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-accent-start/20 blur-3xl" />
+      <div className="rounded-2xl p-6 relative overflow-hidden bg-gradient-hero border border-accent-start/25 shadow-glow">
+        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-fuchsia-500/20 blur-3xl" />
         <div className="relative">
-          <div className="flex items-center gap-2 text-gray-400 mb-2">
+          <div className="flex items-center gap-2 text-purple-200/80 mb-2">
             <Wallet size={16} />
             <span className="text-sm">Income left this month</span>
           </div>
           {loading ? (
             <Skeleton className="h-12 w-48" />
           ) : (
-            <div className="text-4xl font-bold bg-gradient-accent bg-clip-text text-transparent">
+            <div className="text-4xl font-bold text-white drop-shadow-[0_0_18px_rgba(216,180,254,0.45)]">
               {currency}
               {summary?.incomeLeft?.toLocaleString('en-IN') ?? '0'}
             </div>
           )}
           <div className="flex gap-6 mt-4 text-sm">
             <div>
-              <span className="text-gray-500">Income: </span>
+              <span className="text-white">Income: </span>
               <span className="text-white font-medium">
                 {currency}
                 {summary?.monthlyIncome?.toLocaleString('en-IN') ?? '0'}
               </span>
             </div>
             <div>
-              <span className="text-gray-500">Spent: </span>
+              <span className="text-white">Spent: </span>
               <span className="text-white font-medium">
                 {currency}
                 {summary?.totalSpentThisMonth?.toLocaleString('en-IN') ?? '0'}

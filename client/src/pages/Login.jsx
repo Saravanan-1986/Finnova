@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wallet, Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, Lock, Loader2 } from 'lucide-react';
+import FinnovaLogo from '../components/FinnovaLogo.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const Login = () => {
@@ -39,9 +40,7 @@ const Login = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-accent flex items-center justify-center shadow-glow">
-            <Wallet size={24} className="text-white" />
-          </div>
+          <FinnovaLogo size={52} className="logo-glow shrink-0" />
           <div>
             <h1 className="text-2xl font-bold bg-gradient-accent bg-clip-text text-transparent">
               FINNOVA

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LogOut, ChevronLeft, ChevronRight, Wallet, User, Shield } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight, User, Shield } from 'lucide-react';
+import FinnovaLogo from '../FinnovaLogo.jsx';
 import { personalNavItems, insuranceNavItems } from '../../config/navItems.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -44,9 +45,7 @@ const AppLayout = () => {
         >
           {/* Logo */}
           <div className="flex items-center gap-3 px-5 py-6">
-            <div className="w-9 h-9 rounded-xl bg-gradient-accent flex items-center justify-center shrink-0">
-              <Wallet size={18} className="text-white" />
-            </div>
+            <FinnovaLogo size={38} className="logo-glow shrink-0" />
             {!collapsed && (
               <div className="hidden lg:block">
                 <h1 className="font-bold text-lg leading-tight bg-gradient-accent bg-clip-text text-transparent">

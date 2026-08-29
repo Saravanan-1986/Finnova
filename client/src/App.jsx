@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import SplashScreen from './components/SplashScreen.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import RouteGuard from './components/RouteGuard.jsx';
 import Login from './pages/Login.jsx';
@@ -23,8 +25,13 @@ import MyPlans from './pages/Insurance/MyPlans.jsx';
 import FamilyDependents from './pages/Insurance/FamilyDependents.jsx';
 
 const App = () => {
+  // Intro splash: shown on every fresh page load, before any route reveals
+  const [splashDone, setSplashDone] = useState(false);
+
   return (
-    <Routes>
+    <>
+      {!splashDone && <SplashScreen onFinish={() => setSplashDone(true)} />}
+      <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
@@ -69,7 +76,8 @@ const App = () => {
       {/* Redirects */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 };
 
