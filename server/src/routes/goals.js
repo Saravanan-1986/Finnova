@@ -130,4 +130,25 @@ router.patch('/:id/contribute', async (req, res) => {
   }
 });
 
+// @route   DELETE /api/goals/:id
+// @desc    Remove a goal from the planner. Contributions already made stay in
+//          Spending History (the money was genuinely deducted from income).
+// @access  Private
+router.delete('/:id', async (req, res) => {
+  try {
+    const goal = await Goal.findOneAndDelete({
+      _id: req.params.id,
+      user: req.user._id,
+      type: 'goal',
+    });
+    if (!goal) {
+      return res.status(404).json({ success: false, message: 'Goal not found' });
+    }
+    res.json({ success: true, message: 'Goal removed' });
+  } catch (error) {
+    console.error('Delete goal error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;

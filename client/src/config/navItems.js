@@ -25,7 +25,7 @@ export const personalNavItems = [
   { path: '/bills-emi', label: 'Bills & EMI', icon: CalendarClock },
   { path: '/goals', label: 'Goal Planner', icon: Target },
   { path: '/emergency-fund', label: 'Emergency Fund', icon: Shield },
-  { path: '/subscriptions', label: 'Subscription Tracker', icon: Repeat, comingSoon: true },
+  { path: '/subscriptions', label: 'Subscription Tracker', icon: Repeat },
   { path: '/ai-assistant', label: 'AI Assistant', icon: Sparkles },
 ];
 

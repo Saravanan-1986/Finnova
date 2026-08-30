@@ -11,7 +11,7 @@ import BillsEmi from './pages/BillsEmi.jsx';
 import GoalPlanner from './pages/GoalPlanner.jsx';
 import EmergencyFund from './pages/EmergencyFund.jsx';
 import ReceiptScanner from './pages/ReceiptScanner.jsx';
-import ComingSoon from './pages/ComingSoon.jsx';
+import Subscriptions from './pages/Subscriptions.jsx';
 import AIAssistant from './pages/AIAssistant.jsx';
 // Insurance & Schemes section
 import InsuranceOverview from './pages/Insurance/InsuranceOverview.jsx';
@@ -50,15 +50,7 @@ const App = () => {
         <Route path="/bills-emi" element={<BillsEmi />} />
         <Route path="/goals" element={<GoalPlanner />} />
         <Route path="/emergency-fund" element={<EmergencyFund />} />
-        <Route
-          path="/subscriptions"
-          element={
-            <ComingSoon
-              title="Subscription Tracker"
-              description="Track all your recurring subscriptions in one place. Coming soon!"
-            />
-          }
-        />
+        <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/ai-assistant" element={<AIAssistant />} />
 
         {/* Insurance & Schemes Section */}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Target, Loader2, TrendingUp, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Target, Loader2, TrendingUp, History, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getCurrencySymbol } from '../constants/categories.js';
@@ -28,6 +28,10 @@ const GoalPlanner = () => {
   const [contributionGoal, setContributionGoal] = useState(null);
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributing, setContributing] = useState(false);
+
+  // Goal removal state
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchGoals = async () => {
     setLoading(true);
@@ -90,6 +94,20 @@ const GoalPlanner = () => {
     }
   };
 
+  const handleDeleteGoal = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/goals/${deleteTarget._id}`);
+      setGoals((prev) => prev.filter((g) => g._id !== deleteTarget._id));
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Failed to remove goal:', error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Contribution history expand state
   const [openHistory, setOpenHistory] = useState(null);
 
@@ -139,8 +157,17 @@ const GoalPlanner = () => {
                   <h3 className="font-semibold text-white">{goal.title}</h3>
                   <p className="text-xs text-gray-500 mt-1">Target: {formatDate(goal.targetDate)}</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-accent-start/20 flex items-center justify-center">
-                  <Target size={18} className="text-accent-start" />
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setDeleteTarget(goal)}
+                    title="Remove goal"
+                    className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <div className="w-10 h-10 rounded-xl bg-accent-start/20 flex items-center justify-center">
+                    <Target size={18} className="text-accent-start" />
+                  </div>
                 </div>
               </div>
 
@@ -301,6 +328,32 @@ const GoalPlanner = () => {
             {contributing ? 'Adding...' : 'Add Contribution'}
           </button>
         </form>
+      </Modal>
+
+      {/* Remove Goal Confirmation */}
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remove Goal">
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+            <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-gray-300">
+              Remove <span className="font-semibold text-white">{deleteTarget?.title}</span> from
+              your goals? Contributions you already made stay in your Spending History.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setDeleteTarget(null)} className="btn-secondary flex-1">
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteGoal}
+              disabled={deleting}
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-semibold bg-red-500/90 hover:bg-red-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deleting && <Loader2 size={16} className="animate-spin" />}
+              {deleting ? 'Removing...' : 'Remove Goal'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

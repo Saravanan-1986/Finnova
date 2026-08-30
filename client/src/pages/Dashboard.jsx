@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarClock, CreditCard, TrendingDown, Wallet } from 'lucide-react';
+import { ArrowRight, CalendarClock, CreditCard, TrendingDown, Wallet, Plus, Loader2 } from 'lucide-react';
 import api from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getCurrencySymbol, getCategoryIcon } from '../constants/categories.js';
 import CategoryIcon from '../components/ui/CategoryIcon.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import Skeleton from '../components/ui/Skeleton.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 
@@ -13,21 +14,53 @@ const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Extra income modal state
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [incomeForm, setIncomeForm] = useState({ amount: '', note: '' });
+  const [incomeError, setIncomeError] = useState('');
+  const [addingIncome, setAddingIncome] = useState(false);
+
   const currency = getCurrencySymbol(user?.currency);
 
+  const fetchSummary = async () => {
+    try {
+      const res = await api.get('/dashboard/summary');
+      setSummary(res.data.summary);
+    } catch (error) {
+      console.error('Failed to fetch dashboard summary:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const res = await api.get('/dashboard/summary');
-        setSummary(res.data.summary);
-      } catch (error) {
-        console.error('Failed to fetch dashboard summary:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchSummary();
   }, []);
+
+  const handleExtraIncomeSubmit = async (e) => {
+    e.preventDefault();
+    setIncomeError('');
+
+    if (!incomeForm.amount || Number(incomeForm.amount) <= 0) {
+      setIncomeError('Please enter a valid amount');
+      return;
+    }
+
+    setAddingIncome(true);
+    try {
+      await api.post('/extra-income', {
+        amount: Number(incomeForm.amount),
+        note: incomeForm.note,
+      });
+      setShowIncomeModal(false);
+      setIncomeForm({ amount: '', note: '' });
+      fetchSummary();
+    } catch (error) {
+      setIncomeError(error.response?.data?.message || 'Failed to add income');
+    } finally {
+      setAddingIncome(false);
+    }
+  };
 
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -49,7 +82,8 @@ const Dashboard = () => {
       {/* Income left card */}
       <div className="rounded-2xl p-6 relative overflow-hidden bg-gradient-hero border border-accent-start/25 shadow-glow">
         <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-fuchsia-500/20 blur-3xl" />
-        <div className="relative">
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-purple-200/80 mb-2">
             <Wallet size={16} />
             <span className="text-sm">Income left this month</span>
@@ -69,6 +103,12 @@ const Dashboard = () => {
                 {currency}
                 {summary?.monthlyIncome?.toLocaleString('en-IN') ?? '0'}
               </span>
+              {summary?.extraIncomeThisMonth > 0 && (
+                <span className="ml-1.5 text-xs text-emerald-300">
+                  (+{currency}
+                  {summary.extraIncomeThisMonth.toLocaleString('en-IN')} extra)
+                </span>
+              )}
             </div>
             <div>
               <span className="text-white">Spent: </span>
@@ -78,6 +118,19 @@ const Dashboard = () => {
               </span>
             </div>
           </div>
+          </div>
+
+          {/* Add Extra Income button */}
+          <button
+            onClick={() => {
+              setIncomeError('');
+              setShowIncomeModal(true);
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 text-white text-sm font-medium transition-all"
+          >
+            <Plus size={16} />
+            Add Extra Income
+          </button>
         </div>
       </div>
 
@@ -222,6 +275,56 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Add Extra Income Modal */}
+      <Modal open={showIncomeModal} onClose={() => setShowIncomeModal(false)} title="Add Extra Income">
+        <form onSubmit={handleExtraIncomeSubmit} className="space-y-4">
+          {incomeError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {incomeError}
+            </div>
+          )}
+
+          <div>
+            <label className="label-text">Amount ({currency})</label>
+            <input
+              type="number"
+              value={incomeForm.amount}
+              onChange={(e) => setIncomeForm({ ...incomeForm, amount: e.target.value })}
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              className="input-field"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="label-text">Note (optional)</label>
+            <input
+              type="text"
+              value={incomeForm.note}
+              onChange={(e) => setIncomeForm({ ...incomeForm, note: e.target.value })}
+              placeholder="e.g. Freelance project, cashback, gift"
+              className="input-field"
+            />
+          </div>
+
+          <p className="text-[11px] text-gray-500 flex items-start gap-1.5">
+            <Plus size={12} className="shrink-0 mt-0.5 text-emerald-400" />
+            Added to this month's income — "Income left" updates instantly.
+          </p>
+
+          <button
+            type="submit"
+            disabled={addingIncome}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            {addingIncome && <Loader2 size={18} className="animate-spin" />}
+            {addingIncome ? 'Adding...' : 'Add Income'}
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 };

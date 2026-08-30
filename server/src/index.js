@@ -19,6 +19,8 @@ import insuranceRoutes from './routes/insuranceRoutes.js';
 import savedPlanRoutes from './routes/savedPlanRoutes.js';
 import assistantRoutes from './routes/assistantRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import extraIncomeRoutes from './routes/extraIncomeRoutes.js';
 import { refreshAllInsurance } from './services/insuranceRefresh.js';
 
 dotenv.config();
@@ -70,6 +72,8 @@ app.use('/api/schemes', schemeRoutes);
 app.use('/api/saved-plans', savedPlanRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api/receipts', receiptRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/extra-income', extraIncomeRoutes);
 
 // Health check — must be registered BEFORE the catch-all '/api' insurance
 // router below: its global `protect` middleware would otherwise intercept
